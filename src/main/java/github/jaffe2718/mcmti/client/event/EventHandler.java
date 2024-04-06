@@ -10,10 +10,10 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.ChatScreen;
 import net.minecraft.text.Text;
-import org.lwjgl.glfw.GLFW;
 import org.vosk.Model;
 
 import javax.sound.sampled.AudioFormat;
+import java.nio.charset.StandardCharsets;
 
 /**
  * This class is used to register response processing for game events.
@@ -33,6 +33,13 @@ public class EventHandler {
     /** The following variables are used to store the thread that listens to the microphone*/
     private static Thread listenThread;
 
+    /** Variable to control voice recognition toggle */
+    private static boolean voiceRecognitionEnabled = true; // Enabled by default
+
+        private static boolean keyWasPressed = false;
+
+
+
     /** This method is used to register the response processing for the game start event*/
     public static void register() {
 
@@ -43,36 +50,57 @@ public class EventHandler {
         ClientTickEvents.START_CLIENT_TICK.register(EventHandler::handleStartClientTickEvent);
 
         ClientLifecycleEvents.CLIENT_STOPPING.register(EventHandler::handleClientStopEvent);
+
+
+        // Register keybind to toggle voice recognition (using "M" key)
+        ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            if (client.player != null) {
+                if (MicrophoneTextInputClient.vKeyBinding.isPressed()) {
+                    if (!keyWasPressed) { // Verifica se a tecla foi pressionada neste tick
+                        keyWasPressed = true;
+                    }
+                } else {
+                    if (keyWasPressed) { // Verifica se a tecla estava sendo pressionada e foi solta neste tick
+                        keyWasPressed = false;
+                        voiceRecognitionEnabled = !voiceRecognitionEnabled; // Toggle voice recognition
+                        client.player.sendMessage(Text.of("Voice recognition " + (voiceRecognitionEnabled ? "enabled" : "disabled")), false);
+                    }
+                }
+            }
+        });
     }
 
     private static void listenThreadTask() {
         while (true) {
             try {
-                if (speechRecognizer == null) {         // wait 10 seconds and try to initialize the speech recognizer again
-                    if (MinecraftClient.getInstance().player != null) {
-                        MinecraftClient.getInstance().player.sendMessage(Text.of("§cAcoustic Model Load Failed"), true);
-                    }
-                    // listenThread.wait(10000);
-                    try {
-                        Thread.sleep(10000);
-                    } catch (InterruptedException ie) {
-                        continue;
-                    }
-                    speechRecognizer = new SpeechRecognizer(new Model(ConfigUI.acousticModelPath), ConfigUI.sampleRate);
-                } else if (microphoneHandler == null) {  // wait 10 seconds and try to initialize the microphone handler again
-                    listenThread.wait(10000);
-                    microphoneHandler = new MicrophoneHandler(new AudioFormat(ConfigUI.sampleRate, 16, 1, true, false));
-                    microphoneHandler.startListening();  // Try to restart microphone
-                } else {                                 // If the speech recognizer and the microphone handler are initialized successfully
-                    String tmp = speechRecognizer.getStringMsg(microphoneHandler.readData());
-                    if (!tmp.equals("") && !tmp.equals(lastResult) &&
-                            MicrophoneTextInputClient.vKeyBinding.isPressed()) {   // Read audio data from the microphone and send it to the speech recognizer for recognition
-                        if (ConfigUI.encoding_repair) {
-                            lastResult = SpeechRecognizer.repairEncoding(tmp, ConfigUI.srcEncoding, ConfigUI.dstEncoding);
-                        } else {                                        // default configuration without encoding repair
-                            lastResult = tmp;                           // restore the recognized text
+                if (voiceRecognitionEnabled) { // Only listen when voice recognition is enabled
+                    if (speechRecognizer == null) {         // wait 10 seconds and try to initialize the speech recognizer again
+                        if (MinecraftClient.getInstance().player != null) {
+                            MinecraftClient.getInstance().player.sendMessage(Text.of("§cAcoustic Model Load Failed"), false);
+                        }
+                        // listenThread.wait(10000);
+                        try {
+                            Thread.sleep(10000);
+                        } catch (InterruptedException ie) {
+                            continue;
+                        }
+                        speechRecognizer = new SpeechRecognizer(new Model(ConfigUI.acousticModelPath), ConfigUI.sampleRate);
+                    } else if (microphoneHandler == null) {  // wait 10 seconds and try to initialize the microphone handler again
+                        listenThread.wait(10000);
+                        microphoneHandler = new MicrophoneHandler(new AudioFormat(ConfigUI.sampleRate, 16, 1, true, false));
+                        microphoneHandler.startListening();  // Try to restart microphone
+                    } else {                                 // If the speech recognizer and the microphone handler are initialized successfully
+                        String tmp = speechRecognizer.getStringMsg(microphoneHandler.readData());
+                        if (!tmp.equals("") && !tmp.equals(lastResult)) {   // Read audio data from the microphone and send it to the speech recognizer for recognition
+                            if (ConfigUI.encoding_repair) {
+                                lastResult = SpeechRecognizer.repairEncoding(tmp, ConfigUI.srcEncoding, ConfigUI.dstEncoding);
+                            } else {                                        // default configuration without encoding repair
+                                lastResult = tmp;                           // restore the recognized text
+                            }
                         }
                     }
+                } else {
+                    Thread.sleep(100); // Sleep for a short while to reduce CPU usage when voice recognition is disabled
                 }
             } catch (Exception e) {
                 MicrophoneTextInputMain.LOGGER.error(e.getMessage());
@@ -110,30 +138,39 @@ public class EventHandler {
         microphoneHandler = null;
         listenThread = null;                      // Clear the thread
     }
-
-    private static void handleEndClientTickEvent(MinecraftClient client) {     // When the client ticks, check if the user presses the key V
-        if (client.player!=null &&                                             // If the player is not null
-                MicrophoneTextInputClient.vKeyBinding.isPressed() &&           // If the user presses the key V
-                microphoneHandler != null &&                                   // If the microphone initialization is successful
-                !lastResult.equals("")) {                                      // If the recognized text is not empty
-            // Send the recognized text to the server as a chat message automatically
-            if (ConfigUI.autoSend) {
-                client.player.networkHandler.sendChatMessage(ConfigUI.prefix + " " + lastResult);
-                client.player.sendMessage(Text.of("§aMessage Sent"), true);
-            } else {
-                client.setScreen(new ChatScreen(ConfigUI.prefix + " " + lastResult));
-                if (client.currentScreen!=null) client.currentScreen.applyKeyPressNarratorDelay();
-            }
-            lastResult = "";                                                   // Clear the recognized text
-        }
+    private static String processSpecialCharacters(String text) {
+        // Substitua caracteres especiais conforme necessário
+        String processedText = text.replace("ê", "e").replace("Ã", "ã");
+        return processedText;
     }
 
+    private static void handleEndClientTickEvent(MinecraftClient client) {
+        if (client.player != null && microphoneHandler != null && !lastResult.equals("")) {
+            // Processar texto reconhecido para tratar caracteres especiais
+            String processedText = processSpecialCharacters(lastResult);
+
+            // Converter para UTF-8 para garantir a correta interpretação de caracteres
+            processedText = new String(processedText.getBytes(StandardCharsets.UTF_8), StandardCharsets.UTF_8);
+
+            // Enviar o texto processado para o chat
+            if (ConfigUI.autoSend) {
+                client.player.networkHandler.sendChatMessage(ConfigUI.prefix + " " + processedText);
+                client.player.sendMessage(Text.of("§aMessage Sent"), false);
+            } else {
+                client.setScreen(new ChatScreen(ConfigUI.prefix + " " + processedText));
+                // Aumente o tempo que a mensagem fica na tela
+                for (int i = 0; i < 100; i++) {
+                    if (client.currentScreen != null) client.currentScreen.applyKeyPressNarratorDelay();
+                }
+            }
+            lastResult = ""; // Limpar o texto reconhecido
+        }
+    }
     private static void handleStartClientTickEvent(MinecraftClient client) {  // handle another client tick event to notify the user that the speech recognition is in progress and the game is not frozen
-        if (client.player!=null && MicrophoneTextInputClient.vKeyBinding.isPressed()) {  // If the user presses the key V
-            client.player.sendMessage(Text.of("§eRecording & Recognizing..."), true);
+        if (client.player!=null) {
+            client.player.sendMessage(Text.of(""), true);
         } else if (lastResult.length() > 0) {
             lastResult = "";
         }
     }
-
 }

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/Fabric-Microphone-Text-Input.main.iml" filepath="$PROJECT_DIR$/.idea/modules/Fabric-Microphone-Text-Input.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/Fabric-Microphone-Text-Input.test.iml" filepath="$PROJECT_DIR$/.idea/modules/Fabric-Microphone-Text-Input.test.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/Zsmp-Global-transcription.main.iml" filepath="$PROJECT_DIR$/.idea/modules/Zsmp-Global-transcription.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/Zsmp-Global-transcription.test.iml" filepath="$PROJECT_DIR$/.idea/modules/Zsmp-Global-transcription.test.iml" />
+    </modules>
+  </component>
+</project>

@@ -14,7 +14,7 @@ public class MicrophoneTextInputClient implements ClientModInitializer {
      */
     @Override
     public void onInitializeClient() {
-        vKeyBinding = new KeyBinding("key.mcmti.mic", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_V, KeyBinding.MISC_CATEGORY);
+        vKeyBinding = new KeyBinding("Toggle speech recognition", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_M, "GLOBAL TRANSLATIONS"   );
         KeyBindingHelper.registerKeyBinding(vKeyBinding);
         EventHandler.register();
     }
